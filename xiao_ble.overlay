@@ -1,4 +1,4 @@
-&arduino_i2c {
+&i2c0 {
     status = "okay";
 
     /* ADS1115 node at I2C address 0x48 */
