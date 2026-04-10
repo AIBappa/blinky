@@ -11,7 +11,7 @@
 
 /* Custom UUIDs */
 #define SVC_UUID BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
-static struct bt_uuid_128 nadi_svc_uuid = BT_UUID_INIT_128(SVC_UUID);
+static struct bt_uuid_128 wav_svc_uuid = BT_UUID_INIT_128(SVC_UUID);
 
 // Characteristics for: Gain (f1), Channel (f2), SPS (f3), Duration (f4)
 static struct bt_uuid_128 char_uuids[] = {
@@ -67,8 +67,8 @@ static ssize_t on_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
     return len;
 }
 
-BT_GATT_SERVICE_DEFINE(nadi_svc,
-    BT_GATT_PRIMARY_SERVICE(&nadi_svc_uuid),
+BT_GATT_SERVICE_DEFINE(wav_svc,
+    BT_GATT_PRIMARY_SERVICE(&wav_svc_uuid),
     BT_GATT_CHARACTERISTIC(&char_uuids[0].uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, NULL, on_write, NULL),
     BT_GATT_CHARACTERISTIC(&char_uuids[1].uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, NULL, on_write, NULL),
     BT_GATT_CHARACTERISTIC(&char_uuids[2].uuid, BT_GATT_CHRC_WRITE, BT_GATT_PERM_WRITE, NULL, on_write, NULL),
@@ -76,7 +76,7 @@ BT_GATT_SERVICE_DEFINE(nadi_svc,
 );
 
 int main(void) {
-    printk("Starting Nadi acquisition...\n");
+    printk("Starting waveform acquisition...\n");
     sync_ads1115();
     bt_enable(NULL);
 
