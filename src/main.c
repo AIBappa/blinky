@@ -1,13 +1,9 @@
 /* Code for ADS1115 Sensor Interface - Channel, Gain, SPS and Duration are inputs with defaults in code*/
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/adc.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <errno.h> // Required for error codes
-
-#define ADS1115_ADDR 0x48
-#define CONFIG_REG   0x01
-#define CONV_REG     0x00
 
 /* Custom UUIDs */
 #define SVC_UUID BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
@@ -21,37 +17,50 @@ static struct bt_uuid_128 char_uuids[] = {
     BT_UUID_INIT_128(BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef4))
 };
 
-static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
+/* Reference the ADS1115 node from the devicetree */
+static const struct device *adc_dev = DEVICE_DT_GET(DT_NODELABEL(ads1115));
+
+/* Gain Map: 0: 2/3, 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 */
+static const enum adc_gain gain_map[] = {
+    ADC_GAIN_2_3, ADC_GAIN_1, ADC_GAIN_2, 
+    ADC_GAIN_4, ADC_GAIN_8, ADC_GAIN_16
+};
 
 /* System State Struct */
 struct sensor_config {
     uint8_t gain_idx;      // 0-5
     uint8_t channel;       // 0-3
-    uint8_t sps_idx;       // 0-7 (8 to 860 SPS)
+    uint8_t sps_idx;       // 0-7 (Ignored by Zephyr ADC API by default)
     uint32_t duration_ms;  // 0 = Continuous
     int64_t start_time;
-} cfg = {4, 0, 4, 0, 0};   // Defaults: G8, CH0, 128SPS, Continuous
+} cfg = {1, 0, 4, 0, 0};   // Defaults: G1 (+/-4.096V), CH0, Continuous
+
+/* Zephyr ADC Channel Configuration */
+struct adc_channel_cfg channel_cfg = {
+    .reference = ADC_REF_INTERNAL,
+    .gain = ADC_GAIN_1,
+    .acquisition_time = ADC_ACQ_TIME_DEFAULT,
+    .channel_id = 0,
+    .differential = 0
+};
 
 void sync_ads1115() {
-    if (!device_is_ready(i2c_dev)) {
-        printk("Error: I2C device not ready\n");
+    if (!device_is_ready(adc_dev)) {
+        printk("Error: ADC device not ready\n");
         return;
     }
 
-    // Bits 14-12 (MUX), 11-9 (PGA), 8 (Mode=0), 7-5 (Data Rate)
-    uint16_t mux = (0x4 + cfg.channel) << 12;
-    uint16_t pga = (cfg.gain_idx << 9);
-    uint16_t dr  = (cfg.sps_idx << 5);
-    uint16_t config = 0x0003 | mux | pga | dr; 
+    channel_cfg.channel_id = cfg.channel;
+    if (cfg.gain_idx <= 5) {
+        channel_cfg.gain = gain_map[cfg.gain_idx];
+    }
 
-    uint8_t tx[3] = {CONFIG_REG, (config >> 8), (config & 0xFF)};
-    int err = i2c_write(i2c_dev, tx, 3, ADS1115_ADDR);
-    
+    int err = adc_channel_setup(adc_dev, &channel_cfg);
     if (err) {
-        printk("I2C Write Error: %d (Check wiring/address)\n", err);
+        printk("ADC Setup Error: %d\n", err);
     } else {
         cfg.start_time = k_uptime_get(); 
-        printk("ADS1115 Synced: CH%d, G%d, SPS_idx%d\n", cfg.channel, cfg.gain_idx, cfg.sps_idx);
+        printk("ADS1115 Setup: CH%d, GainIdx%d\n", cfg.channel, cfg.gain_idx);
     }
 }
 
@@ -76,21 +85,30 @@ BT_GATT_SERVICE_DEFINE(wav_svc,
 );
 
 int main(void) {
-    printk("Starting waveform acquisition...\n");
+    printk("Starting waveform acquisition via Zephyr ADC API...\n");
     sync_ads1115();
     bt_enable(NULL);
 
-    uint8_t reg = CONV_REG, rx[2];
+    int16_t sample_buffer;
+    struct adc_sequence sequence = {
+        .buffer      = &sample_buffer,
+        .buffer_size = sizeof(sample_buffer),
+        // The Zephyr ADS1X1X driver requires the resolution to be set to 15 for the ADS1115
+        .resolution  = 15,
+    };
+
     while (1) {
         if (cfg.duration_ms == 0 || (k_uptime_get() - cfg.start_time) < cfg.duration_ms) {
-            int err = i2c_write_read(i2c_dev, ADS1115_ADDR, &reg, 1, rx, 2);
+            // Tell the sequence to read from the currently active channel bitmask
+            sequence.channels = BIT(cfg.channel); 
+
+            int err = adc_read(adc_dev, &sequence);
             
             if (err == 0) {
-                int16_t val = (rx[0] << 8) | rx[1];
-                printk(">CH[%d]|G[%d]|SPS[%d]:%d\n", cfg.channel, cfg.gain_idx, cfg.sps_idx, val);
+                printk(">CH[%d]|G[%d]:%d\n", cfg.channel, cfg.gain_idx, sample_buffer);
             } else {
-                // If the sensor is unplugged, you'll see Error -5 (EIO)
-                printk("I2C Read Error: %d\n", err);
+                // If the sensor is unplugged or wiring is bad, you'll see an ADC error here
+                printk("ADC Read Error: %d\n", err);
                 k_msleep(500); // Slow down the loop on error to avoid flooding logs
             }
         }
