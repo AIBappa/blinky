@@ -1,33 +1,53 @@
 &i2c0 {
-    status = "okay";
+	status = "okay";
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-1 = <&i2c0_sleep>;
+	pinctrl-names = "default", "sleep";
 
-    /* ADS1115 node at I2C address 0x48 */
-    ads1115: ads1115@48 {
-        compatible = "ti,ads1115";
-        reg = <0x48>;
-        #io-channel-cells = <1>;
-        #address-cells = <1>;
-        #size-cells = <0>;
+	ads1115: ads1115@48 {
+		compatible = "ti,ads1115";
+		reg = <0x48>;
+		#io-channel-cells = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 
-        /* Default Channel 0 Setup */
-        channel@0 {
-            reg = <0>;
-            zephyr,gain = "ADC_GAIN_1";      // Default Gain (±4.096V)
-            zephyr,reference = "ADC_REF_INTERNAL";
-            zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-            zephyr,resolution = <16>;
-        };
+		/* Channel 0: Typical for Clinical Sensor Input */
+		channel@0 {
+			reg = <0>;
+			zephyr,gain = "ADC_GAIN_1";      /* ±4.096V range */
+			zephyr,reference = "ADC_REF_INTERNAL";
+			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+			zephyr,resolution = <16>;
+		};
 
-        /* Add placeholders for other channels if needed */
-        channel@1 { reg = <1>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL"; zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>; zephyr,resolution = <16>; };
-        channel@2 { reg = <2>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL"; zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>; zephyr,resolution = <16>; };
-        channel@3 { reg = <3>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL"; zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>; zephyr,resolution = <16>; };
-    };
+		/* Placeholder Channels 1-3 */
+		channel@1 { reg = <1>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL"; zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>; zephyr,resolution = <16>; };
+		channel@2 { reg = <2>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL"; zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>; zephyr,resolution = <16>; };
+		channel@3 { reg = <3>; zephyr,gain = "ADC_GAIN_1"; zephyr,reference = "ADC_REF_INTERNAL"; zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>; zephyr,resolution = <16>; };
+	};
 };
 
-/* Optional: Link the ADC to a 'zephyr,user' node for easier code access */
+&pinctrl {
+	i2c0_default: i2c0_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 0, 4)>, /* Physical Pin D4 */
+			        <NRF_PSEL(TWIM_SCL, 0, 5)>; /* Physical Pin D5 */
+			bias-pull-up; /* Software backup for your board's resistors */
+		};
+	};
+
+	i2c0_sleep: i2c0_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 0, 4)>,
+			        <NRF_PSEL(TWIM_SCL, 0, 5)>;
+			low-power-enable;
+		};
+	};
+};
+
 / {
-    zephyr,user {
-        io-channels = <&ads1115 0>;
-    };
+	/* This allows you to use 'DEVICE_DT_GET(DT_NODELABEL(ads1115))' in your C code */
+	zephyr,user {
+		io-channels = <&ads1115 0>;
+	};
 };
