@@ -1,5 +1,7 @@
 &i2c1 {
+    compatible = "nordic,nrf-twim"; /* Force hardware DMA I2C driver */
     status = "okay";
+    clock-frequency = <I2C_BITRATE_STANDARD>; /* Force 100kHz standard mode */
 
     ads1115: ads1115@48 {
         compatible = "ti,ads1115";
