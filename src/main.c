@@ -21,7 +21,7 @@ static struct bt_uuid_128 char_uuids[] = {
     BT_UUID_INIT_128(BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef4))
 };
 
-static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 
 /* System State Struct */
 struct sensor_config {
