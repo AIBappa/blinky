@@ -1,8 +1,8 @@
 #include <zephyr/dt-bindings/pinctrl/nrf-pinctrl.h>
 
-/* Forcefully redefine the I2C1 pin states */
+/* Forcefully redefine the I2C0 pin states for external headers */
 &pinctrl {
-	i2c1_default: i2c1_default {
+	i2c0_default: i2c0_default {
 		group1 {
 			psels = <NRF_PSEL(TWIM_SDA, 0, 4)>,
 				    <NRF_PSEL(TWIM_SCL, 0, 5)>;
@@ -10,7 +10,7 @@
 		};
 	};
 
-	i2c1_sleep: i2c1_sleep {
+	i2c0_sleep: i2c0_sleep {
 		group1 {
 			psels = <NRF_PSEL(TWIM_SDA, 0, 4)>,
 				    <NRF_PSEL(TWIM_SCL, 0, 5)>;
@@ -19,17 +19,17 @@
 	};
 };
 
-/* Disable the SPI peripheral that shares pins with i2c1 */
-&spi1 {
+/* Disable the SPI peripheral that shares pins with i2c0 */
+&spi0 {
     status = "disabled";
 };
 
-&i2c1 {
+&i2c0 {
     compatible = "nordic,nrf-twim"; /* Force hardware DMA I2C driver */
     status = "okay";
     clock-frequency = <I2C_BITRATE_STANDARD>; /* Force 100kHz standard mode */
-    pinctrl-0 = <&i2c1_default>;
-    pinctrl-1 = <&i2c1_sleep>;
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-1 = <&i2c0_sleep>;
     pinctrl-names = "default", "sleep";
 
     ads1115: ads1115@48 {
