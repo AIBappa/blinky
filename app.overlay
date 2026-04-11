@@ -33,4 +33,9 @@
     zephyr,user {
         io-channels = <&ads1115 0>;
     };
+
+    /* Explicitly map the Zephyr console to the USB CDC ACM serial device */
+    chosen {
+        zephyr,console = &zephyr_udc0;
+    };
 };

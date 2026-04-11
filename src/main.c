@@ -12,6 +12,16 @@ int main(void) {
     int err;
     int16_t sample_buffer;
 
+    /* Wait for the USB Serial connection to be opened by the user */
+    const struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    uint32_t dtr = 0;
+    while (!dtr) {
+        uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
+        k_sleep(K_MSEC(100));
+    }
+    /* Small delay so the terminal doesn't miss the first printk */
+    k_msleep(1000);
+
     printk("====================================\n");
     printk("       ADS1115 SENSOR READER        \n");
     printk("====================================\n");
