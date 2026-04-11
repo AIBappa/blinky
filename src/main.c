@@ -1,45 +1,52 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/i2c.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/adc.h>
 
-/* Get the raw I2C bus device (i2c1) */
-static const struct device *i2c_bus = DEVICE_DT_GET(DT_NODELABEL(i2c1));
+/* Grab the specific ADS1115 channel from the device tree */
+static const struct adc_dt_spec adc_channel = ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
 
 int main(void) {
+    int err;
+    int16_t sample_buffer;
+
     printk("====================================\n");
-    printk("   XIAO I2C1 (D4/D5) BUS SCANNER    \n");
+    printk("       ADS1115 SENSOR READER        \n");
     printk("====================================\n");
 
-    if (!device_is_ready(i2c_bus)) {
-        printk("FATAL ERROR: I2C bus not ready!\n");
+    /* Check if the ADS1115 device is ready on the I2C bus */
+    if (!adc_is_ready_dt(&adc_channel)) {
+        printk("FATAL ERROR: ADS1115 device not ready!\n");
+        printk("Check your wiring, power, and I2C address (0x48).\n");
         return 0;
     }
 
-    printk("I2C bus ready. Starting scan...\n");
+    /* Configure the channel with the settings from app.overlay (Gain, Acq Time, etc.) */
+    err = adc_channel_setup_dt(&adc_channel);
+    if (err < 0) {
+        printk("Could not setup channel (%d)\n", err);
+        return 0;
+    }
+
+    printk("ADS1115 is initialized and ready. Reading values...\n\n");
+
+    /* Prepare the sequence structure for reading */
+    struct adc_sequence sequence = {
+        .buffer = &sample_buffer,
+        .buffer_size = sizeof(sample_buffer),
+    };
 
     while (1) {
-        printk("\nScanning...\n");
-        uint8_t count = 0;
-        
-        for (uint8_t addr = 0x01; addr <= 0x7F; addr++) {
-            uint8_t dummy_data = 0;
-            // Attempt to read 0 bytes to see if the address ACKs
-            int err = i2c_write(i2c_bus, &dummy_data, 0, addr);
-
-            if (err == 0) {
-                printk("---> FOUND DEVICE AT ADDRESS: 0x%02X\n", addr);
-                count++;
-            }
-        }
-
-        if (count == 0) {
-            printk("NO DEVICES FOUND. Check wiring, power, and pull-up resistors!\n");
+        /* Ask the ADC API to read a sample using the DT spec */
+        err = adc_read_dt(&adc_channel, &sequence);
+        if (err < 0) {
+            printk("Failed to read from ADC (%d)\n", err);
         } else {
-            printk("Scan complete. Found %d device(s).\n", count);
+            /* We have a raw 15-bit value from the ADS1115! */
+            printk("Raw ADS1115 Reading: %d\n", sample_buffer);
         }
 
-        k_msleep(3000); // Scan every 3 seconds
+        k_msleep(1000); // Read every 1 second
     }
     return 0;
 }
