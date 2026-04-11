@@ -1,10 +1,7 @@
-/* Use i2c1 which is mapped to external pins 0.4 and 0.5 on XIAO BLE */
 &i2c1 {
     compatible = "nordic,nrf-twim";
     status = "okay";
     clock-frequency = <I2C_BITRATE_STANDARD>;
-
-    /* Explicitly mapping the pins (Optional, as xiao_ble already defaults to 0.4 and 0.5) */
     pinctrl-0 = <&i2c1_default>;
     pinctrl-1 = <&i2c1_sleep>;
     pinctrl-names = "default", "sleep";
@@ -12,7 +9,6 @@
 
 / {
     chosen {
-        /* Map the standard printk console to the USB Virtual COM Port */
         zephyr,console = &board_cdc_acm_uart;
     };
 };
