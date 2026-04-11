@@ -9,3 +9,10 @@
     pinctrl-1 = <&i2c1_sleep>;
     pinctrl-names = "default", "sleep";
 };
+
+/ {
+    chosen {
+        /* Map the standard printk console to the USB Virtual COM Port */
+        zephyr,console = &board_cdc_acm_uart;
+    };
+};
