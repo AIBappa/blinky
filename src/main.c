@@ -1,60 +1,58 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/adc.h>
-#include <zephyr/usb/usb_device.h>
-#include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/sys/printk.h>
 
-/* Grab the specific ADS1115 channel from the device tree */
-static const struct adc_dt_spec adc_channel = ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
+#define I2C_NODE DT_NODELABEL(i2c1)
+#define ADS1115_I2C_ADDRESS 0x48
+
+static const struct device *i2c_dev = DEVICE_DT_GET(I2C_NODE);
 
 int main(void) {
-    int err;
-    int16_t sample_buffer;
-
-    /* Give the USB connection time to initialize and the user time to open the serial monitor.
-     * We don't wait for DTR indefinitely because it can block the program forever if the serial terminal
-     * isn't opened or if the driver doesn't support the DTR flag.
-     */
+    /* Delay to allow USB serial to connect so you don't miss logs */
     k_msleep(3000);
 
     printk("====================================\n");
-    printk("       ADS1115 SENSOR READER        \n");
+    printk("     RAW I2C ADS1115 READER         \n");
     printk("====================================\n");
 
-    /* Check if the ADS1115 device is ready on the I2C bus */
-    if (!adc_is_ready_dt(&adc_channel)) {
-        printk("FATAL ERROR: ADS1115 device not ready!\n");
-        printk("Check your wiring, power, and I2C address (0x48).\n");
+    if (!device_is_ready(i2c_dev)) {
+        printk("I2C bus i2c1 is not ready!\n");
         return 0;
     }
 
-    /* Configure the channel with the settings from app.overlay (Gain, Acq Time, etc.) */
-    err = adc_channel_setup_dt(&adc_channel);
+    /* Configure ADS1115: Config Register (0x01) 
+     * MSB: 0x42 (AIN0 to GND, FS=4.096V, Continuous mode)
+     * LSB: 0x83 (128 SPS, Disable comparator)
+     */
+    uint8_t config_buf[3] = {0x01, 0x42, 0x83};
+    int err = i2c_write(i2c_dev, config_buf, 3, ADS1115_I2C_ADDRESS);
     if (err < 0) {
-        printk("Could not setup channel (%d)\n", err);
+        printk("Failed to configure ADS1115 (err %d). Check wiring.\n", err);
         return 0;
     }
-
-    printk("ADS1115 is initialized and ready. Reading values...\n\n");
-
-    /* Prepare the sequence structure for reading */
-    struct adc_sequence sequence = {
-        .buffer = &sample_buffer,
-        .buffer_size = sizeof(sample_buffer),
-    };
+    printk("ADS1115 configured successfully.\n\n");
 
     while (1) {
-        /* Ask the ADC API to read a sample using the DT spec */
-        err = adc_read_dt(&adc_channel, &sequence);
+        uint8_t reg_addr = 0x00; // Conversion register
+        uint8_t read_buf[2];
+
+        /* Write register address, then read 2 bytes back */
+        err = i2c_write_read(i2c_dev, ADS1115_I2C_ADDRESS, &reg_addr, 1, read_buf, 2);
+        
         if (err < 0) {
-            printk("Failed to read from ADC (%d)\n", err);
+            printk("I2C read failed: %d\n", err);
         } else {
-            /* We have a raw 15-bit value from the ADS1115! */
-            printk("Raw ADS1115 Reading: %d\n", sample_buffer);
+            /* Combine MSB and LSB */
+            int16_t adc_val = (read_buf[0] << 8) | read_buf[1];
+            
+            /* Convert raw reading to voltage (FS = +/- 4.096V, 15-bit resolution = 32768) */
+            float voltage = (adc_val * 4.096f) / 32768.0f;
+            
+            printk("Raw ADS1115 reading: %d  |  Voltage: %.4f V\n", adc_val, (double)voltage);
         }
 
-        k_msleep(1000); // Read every 1 second
+        k_msleep(1000);
     }
     return 0;
 }
