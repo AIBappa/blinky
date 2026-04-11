@@ -1,10 +1,6 @@
-&i2c1 {
-    compatible = "nordic,nrf-twim";
+&xiao_i2c {
     status = "okay";
     clock-frequency = <I2C_BITRATE_STANDARD>;
-    pinctrl-0 = <&i2c1_default>;
-    pinctrl-1 = <&i2c1_sleep>;
-    pinctrl-names = "default", "sleep";
 };
 
 / {
