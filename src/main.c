@@ -2,6 +2,8 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/adc.h>
+#include <zephyr/usb/usb_device.h>
+#include <zephyr/drivers/uart.h>
 
 /* Grab the specific ADS1115 channel from the device tree */
 static const struct adc_dt_spec adc_channel = ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
@@ -9,6 +11,21 @@ static const struct adc_dt_spec adc_channel = ADC_DT_SPEC_GET(DT_PATH(zephyr_use
 int main(void) {
     int err;
     int16_t sample_buffer;
+
+    /* Initialize USB Console on the XIAO */
+    const struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    uint32_t dtr = 0;
+
+    if (usb_enable(NULL)) {
+        return 0;
+    }
+
+    /* Wait for a terminal to connect via USB */
+    while (!dtr) {
+        uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
+        k_sleep(K_MSEC(100));
+    }
+    k_sleep(K_MSEC(1000)); // Brief pause to let the terminal software catch up
 
     printk("====================================\n");
     printk("       ADS1115 SENSOR READER        \n");
