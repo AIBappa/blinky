@@ -7,11 +7,13 @@
         compatible = "ti,ads1115";
         reg = <0x48>;
         #io-channel-cells = <1>;
+        #address-cells = <1>;
+        #size-cells = <0>;
     };
 };
 
 / {
     chosen {
-        zephyr,console = &board_cdc_acm_uart; [cite: 2]
+        zephyr,console = &board_cdc_acm_uart;
     };
 };
