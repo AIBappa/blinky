@@ -1,12 +1,4 @@
-/* 2. (Optional) Turn off the internal IMU bus if using the "Sense" board */
-&i2c0 {
-    status = "disabled";
-};
-
-/* Disable internal nRF ADC to save power and avoid confusion */
-&adc {
-    status = "disabled";
-};
+/* (No need to disable i2c0 or internal ADC, because the base xiao_ble board doesn't enable them) */
 
 /* 3. Use i2c1 which is already mapped to external pins 0.4 and 0.5 */
 &i2c1 {

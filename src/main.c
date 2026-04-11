@@ -3,12 +3,12 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 
-/* Get the raw I2C bus device (i2c0) */
-static const struct device *i2c_bus = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+/* Get the raw I2C bus device (i2c1) */
+static const struct device *i2c_bus = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 
 int main(void) {
     printk("====================================\n");
-    printk("   XIAO I2C0 (D4/D5) BUS SCANNER    \n");
+    printk("   XIAO I2C1 (D4/D5) BUS SCANNER    \n");
     printk("====================================\n");
 
     if (!device_is_ready(i2c_bus)) {
