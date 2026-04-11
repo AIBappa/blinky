@@ -3,6 +3,8 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/sys/printk.h>
 
+#include <zephyr/drivers/uart.h>
+
 #define I2C_NODE DT_NODELABEL(i2c1)
 #define ADS1115_I2C_ADDRESS 0x48
 
@@ -10,8 +12,19 @@
 #define ADS1115_REG_CONFIG 0x01
 
 int main(void) {
-    /* Delay to allow USB serial to connect so you don't miss logs */
-    k_msleep(3000);
+    /* Wait for the USB Serial console to be connected (up to 5 seconds) */
+    const struct device *console_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    uint32_t dtr = 0;
+    if (device_is_ready(console_dev)) {
+        for (int i = 0; i < 50; i++) {
+            uart_line_ctrl_get(console_dev, UART_LINE_CTRL_DTR, &dtr);
+            if (dtr) {
+                break;
+            }
+            k_msleep(100);
+        }
+    }
+    k_msleep(1000); // Give terminal a second to render
 
     const struct device *i2c_dev = DEVICE_DT_GET(I2C_NODE);
 
