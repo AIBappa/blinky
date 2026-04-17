@@ -13,7 +13,8 @@ static const struct spi_dt_spec ads_spi = SPI_DT_SPEC_GET(SPI_NODE,
     SPI_OP_MODE_MASTER | SPI_WORD_SET(8) | SPI_MODE_CPHA, 0);
 
 // DRDY Config
-static const struct gpio_dt_spec drdy_pin = GPIO_DT_SPEC_GET(SPI_NODE, drdy_gpios);
+#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+static const struct gpio_dt_spec drdy_pin = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, drdy_gpios);
 static struct gpio_callback drdy_cb_data;
 static K_SEM_DEFINE(drdy_sem, 0, 1);
 
@@ -27,7 +28,7 @@ void drdy_isr(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 #define ADS1220_CMD_START     0x08  // Start/Sync command
 #define ADS1220_REG1_TEMP_ON  0x02  // Bit 1 = 1 (Enables Temp Sensor)
 
-void main(void) {
+int main(void) {
     int err;
 
     printk("\n--- ADS1220 Temperature Checker (Zephyr) ---\n");
@@ -35,25 +36,25 @@ void main(void) {
     // Check if the SPI bus device is ready
     if (!device_is_ready(ads_spi.bus)) {
         printk("Error: SPI bus device not ready.\n");
-        return;
+        return 0;
     }
 
     // Check and configure DRDY pin
     if (!gpio_is_ready_dt(&drdy_pin)) {
         printk("Error: DRDY pin not ready.\n");
-        return;
+        return 0;
     }
 
     err = gpio_pin_configure_dt(&drdy_pin, GPIO_INPUT);
     if (err < 0) {
         printk("Error configuring DRDY pin: %d\n", err);
-        return;
+        return 0;
     }
 
     err = gpio_pin_interrupt_configure_dt(&drdy_pin, GPIO_INT_EDGE_TO_ACTIVE);
     if (err < 0) {
         printk("Error configuring DRDY interrupt: %d\n", err);
-        return;
+        return 0;
     }
 
     gpio_init_callback(&drdy_cb_data, drdy_isr, BIT(drdy_pin.pin));
@@ -67,7 +68,7 @@ void main(void) {
     err = spi_write_dt(&ads_spi, &tx_set);
     if (err) {
         printk("SPI Write Error: %d\n", err);
-        return;
+        return 0;
     }
     printk("ADS1220 configured for Temperature Mode.\n");
 
@@ -114,4 +115,6 @@ void main(void) {
         // Wait before starting the next conversion
         k_msleep(1000);
     }
+    
+    return 0;
 }
