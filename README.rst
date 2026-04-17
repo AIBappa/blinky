@@ -1,106 +1,40 @@
 .. zephyr:code-sample:: blinky
    :name: Blinky
-   :relevant-api: gpio_interface
+   :relevant-api: SPI Interface, GPIO API
 
-   Blink an LED forever using the GPIO API.
+   Connect the ADS1220 board over SPI. Intial test is to acquire temperature from this board and display it.
+   Later have to connect a PVDF sensor to the ADS1220 and acquire vibration data from it.
+
 
 Overview
 ********
 
-The Blinky sample blinks an LED forever using the :ref:`GPIO API <gpio_api>`.
-
-The source code shows how to:
-
-#. Get a pin specification from the :ref:`devicetree <dt-guide>` as a
-   :c:struct:`gpio_dt_spec`
-#. Configure the GPIO pin as an output
-#. Toggle the pin forever
-
-See :zephyr:code-sample:`pwm-blinky` for a similar sample that uses the PWM API instead.
-
-.. _blinky-sample-requirements:
 
 Requirements
 ************
 
 Your board must:
 
-#. Have an LED connected via a GPIO pin (these are called "User LEDs" on many of
-   Zephyr's :ref:`boards`).
-#. Have the LED configured using the ``led0`` devicetree alias.
+
 
 Building and Running
 ********************
 
-Build and flash Blinky as follows, changing ``reel_board`` for your board:
 
-.. zephyr-app-commands::
-   :zephyr-app: samples/basic/blinky
-   :board: reel_board
-   :goals: build flash
-   :compact:
-
-After flashing, the LED starts to blink and messages with the current LED state
-are printed on the console. If a runtime error occurs, the sample exits without
-printing to the console.
 
 Build errors
 ************
 
-You will see a build error at the source code line defining the ``struct
-gpio_dt_spec led`` variable if you try to build Blinky for an unsupported
-board.
-
-On GCC-based toolchains, the error looks like this:
-
-.. code-block:: none
-
-   error: '__device_dts_ord_DT_N_ALIAS_led_P_gpios_IDX_0_PH_ORD' undeclared here (not in a function)
 
 Adding board support
 ********************
 
-To add support for your board, add something like this to your devicetree:
 
-.. code-block:: DTS
-
-   / {
-   	aliases {
-   		led0 = &myled0;
-   	};
-
-   	leds {
-   		compatible = "gpio-leds";
-   		myled0: led_0 {
-   			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
-                };
-   	};
-   };
-
-The above sets your board's ``led0`` alias to use pin 13 on GPIO controller
-``gpio0``. The pin flags :c:macro:`GPIO_ACTIVE_HIGH` mean the LED is on when
-the pin is set to its high state, and off when the pin is in its low state.
 
 Tips:
 
-- See :dtcompatible:`gpio-leds` for more information on defining GPIO-based LEDs
-  in devicetree.
-
-- If you're not sure what to do, check the devicetrees for supported boards which
-  use the same SoC as your target. See :ref:`get-devicetree-outputs` for details.
-
-- See :zephyr_file:`include/zephyr/dt-bindings/gpio/gpio.h` for the flags you can use
-  in devicetree.
-
-- If the LED is built in to your board hardware, the alias should be defined in
-  your :ref:`BOARD.dts file <devicetree-in-out-files>`. Otherwise, you can
-  define one in a :ref:`devicetree overlay <set-devicetree-overlays>`.
 
 
 GOLDEN Rule: Matruskha dolls are not allowed in Zephyr samples.
 
 Latest status (17-04-2026)
-1) Checked the I2C display with the I2C scanner, and it is detected at address 0x3C.
-2) The I2C display is connected to the correct pins (SDA and SCL) and the VDD and GND are properly connected to the Xiao.This means wiring and Xiao drive should be working ok.
-3) However the ADS1115 board is still not getting connected or any address visible with the same program and same wiring connected.
-4) Project abandoned because this is likely a board issue. Robu will have to be informed accordingly for replacement.
