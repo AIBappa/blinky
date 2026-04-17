@@ -44,8 +44,7 @@ int main(void) {
         return 0;
     }
 
-    // Added a pull-up to DRDY just in case the pin floats
-    err = gpio_pin_configure_dt(&drdy_pin, GPIO_INPUT | GPIO_PULL_UP);
+    err = gpio_pin_configure_dt(&drdy_pin, GPIO_INPUT);
     if (err < 0) {
         printk("Error configuring DRDY pin: %d\n", err);
         return 0;
@@ -65,7 +64,10 @@ int main(void) {
     uint8_t reset_cmd = ADS1220_CMD_RESET;
     struct spi_buf tx_reset_buf = { .buf = &reset_cmd, .len = 1 };
     struct spi_buf_set tx_reset_set = { .buffers = &tx_reset_buf, .count = 1 };
-    spi_write_dt(&ads_spi, &tx_reset_set);
+    err = spi_write_dt(&ads_spi, &tx_reset_set);
+    if (err) {
+        printk("SPI Write Error (Reset): %d\n", err);
+    }
     k_msleep(50); // Wait for reset to complete
 
     printk("Reading ADS1220 Registers to verify SPI connection...\n");
@@ -102,28 +104,38 @@ int main(void) {
         uint8_t start_cmd = ADS1220_CMD_START;
         struct spi_buf tx_start_buf = { .buf = &start_cmd, .len = 1 };
         struct spi_buf_set tx_start_set = { .buffers = &tx_start_buf, .count = 1 };
-        spi_write_dt(&ads_spi, &tx_start_set);
+        err = spi_write_dt(&ads_spi, &tx_start_set);
+        if (err) {
+            printk("SPI Write Error (Start): %d\n", err);
+        }
 
         if (k_sem_take(&drdy_sem, K_MSEC(500)) == 0) {
-            uint8_t cmd = ADS1220_CMD_RDATA;
-            uint8_t rx_raw[3] = {0, 0, 0};
+            // ✅ Explicit 4-byte transaction: cmd + 3 data bytes
+            uint8_t tx_rdata[4] = { ADS1220_CMD_RDATA, 0x00, 0x00, 0x00 };
+            uint8_t rx_rdata[4] = { 0 };
 
-            struct spi_buf tx_cmd_buf = { .buf = &cmd, .len = 1 };
-            struct spi_buf_set tx_cmd_set = { .buffers = &tx_cmd_buf, .count = 1 };
-            struct spi_buf rx_data_buf = { .buf = rx_raw, .len = 3 };
-            struct spi_buf_set rx_data_set = { .buffers = &rx_data_buf, .count = 1 };
+            struct spi_buf tx_rdata_buf = { .buf = tx_rdata, .len = 4 };
+            struct spi_buf_set tx_rdata_set = { .buffers = &tx_rdata_buf, .count = 1 };
+            struct spi_buf rx_rdata_buf = { .buf = rx_rdata, .len = 4 };
+            struct spi_buf_set rx_rdata_set = { .buffers = &rx_rdata_buf, .count = 1 };
 
-            err = spi_transceive_dt(&ads_spi, &tx_cmd_set, &rx_data_set);
+            err = spi_transceive_dt(&ads_spi, &tx_rdata_set, &rx_rdata_set);
 
             if (err == 0) {
-                int32_t raw_val = (rx_raw[0] << 16) | (rx_raw[1] << 8) | rx_raw[2];
+                // rx_rdata[0] is the byte received during cmd (discard it)
+                int32_t raw_val = ((int32_t)rx_rdata[1] << 16) | ((int32_t)rx_rdata[2] << 8) | rx_rdata[3];
+                
+                // ✅ Sign-extend to 32 bits before shifting
+                if (raw_val & 0x800000) {         // if bit 23 is set, it's negative
+                    raw_val |= 0xFF000000;        // sign-extend into upper byte
+                }
+                
                 float tempC = (float)(raw_val >> 10) * 0.03125f;
                 printk("Internal Temperature: %.2f C\n", (double)tempC);
             } else {
                 printk("SPI Transceive Error: %d\n", err);
             }
         } else {
-            // Also print out the actual pin state on timeout so we know if it was stuck high or low
             int current_drdy = gpio_pin_get_dt(&drdy_pin);
             printk("Timeout waiting for DRDY! Current DRDY pin state: %d\n", current_drdy);
         }
