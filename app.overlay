@@ -2,9 +2,9 @@
     status = "okay"; 
     clock-frequency = <I2C_BITRATE_STANDARD>; 
 
-    ads1115: ads1115@48 {
+    ads1115: ads1115@49 {
         compatible = "ti,ads1115";
-        reg = <0x48>;
+        reg = <0x49>;
         #io-channel-cells = <1>;
         #address-cells = <1>;
         #size-cells = <0>;

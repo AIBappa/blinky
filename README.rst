@@ -98,3 +98,9 @@ Tips:
 
 
 GOLDEN Rule: Matruskha dolls are not allowed in Zephyr samples.
+
+Latest status (17-04-2026)
+1) Checked the I2C display with the I2C scanner, and it is detected at address 0x3C.
+2) The I2C display is connected to the correct pins (SDA and SCL) and the VDD and GND are properly connected to the Xiao.This means wiring and Xiao drive should be working ok.
+3) However the ADS1115 board is still not getting connected or any address visible with the same program and same wiring connected.
+4) Project abandoned because this is likely a board issue. Robu will have to be informed accordingly for replacement.
