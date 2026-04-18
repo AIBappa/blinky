@@ -1,7 +1,7 @@
 / {
     zephyr,user {
-        /* D2 is P0.28 on the XIAO BLE */
-        drdy-gpios = <&gpio0 28 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        /* D2 is P0.28 on the XIAO BLE. DRDY is active low. */
+        drdy-gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
     };
 };
 
@@ -25,24 +25,17 @@
     spi2_default: spi2_default {
         group1 {
             psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,   /* D8  -> P1.13 */
-                    <NRF_PSEL(SPIM_MOSI, 1, 15)>;  /* D10 -> P1.15 */
-        };
-        group2 {
-            psels = <NRF_PSEL(SPIM_MISO, 1, 14)>;  /* D9  -> P1.14 */
-            bias-pull-down;
+                    <NRF_PSEL(SPIM_MOSI, 1, 15)>,  /* D10 -> P1.15 */
+                    <NRF_PSEL(SPIM_MISO, 1, 14)>;  /* D9  -> P1.14 */
         };
     };
 
     spi2_sleep: spi2_sleep {
         group1 {
             psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
-                    <NRF_PSEL(SPIM_MOSI, 1, 15)>;
+                    <NRF_PSEL(SPIM_MOSI, 1, 15)>,
+                    <NRF_PSEL(SPIM_MISO, 1, 14)>;
             low-power-enable;
-        };
-        group2 {
-            psels = <NRF_PSEL(SPIM_MISO, 1, 14)>;
-            low-power-enable;
-            bias-pull-down;
         };
     };
 };
