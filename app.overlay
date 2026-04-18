@@ -1,19 +1,59 @@
 / {
     zephyr,user {
-        /* DRDY is on D2 -> P0.28. Active Low. */
-        drdy-gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
+        /* Gemini's mapping: DRDY is D2 -> P0.04 */
+        drdy-gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
     };
 };
 
-&xiao_spi {
-    status = "okay";
-    /* CS is on D1 -> P0.03. Active Low. */
-    cs-gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+/* Disable the LED that steals P0.26 */
+&led0 {
+    status = "disabled";
+};
 
-    ads1220: ads1220@0 {
+/* Disable I2C that steals P0.04 */
+&i2c1 {
+    status = "disabled";
+};
+
+/* Disable the default Seeed SPI mapping */
+&xiao_spi {
+    status = "disabled";
+};
+
+&pinctrl {
+    /* Use Gemini's mapping for SCLK, MOSI, MISO */
+    spi2_default: spi2_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 0, 8)>,   /* D8  -> P0.08 */
+                    <NRF_PSEL(SPIM_MOSI, 0, 10)>, /* D10 -> P0.10 */
+                    <NRF_PSEL(SPIM_MISO, 0, 9)>;  /* D9  -> P0.09 */
+        };
+    };
+
+    spi2_sleep: spi2_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 0, 8)>,
+                    <NRF_PSEL(SPIM_MOSI, 0, 10)>,
+                    <NRF_PSEL(SPIM_MISO, 0, 9)>;
+            low-power-enable;
+        };
+    };
+};
+
+/* Use &spi2 instead of &spi3 to avoid hardware clock conflicts */
+&spi2 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+    pinctrl-0 = <&spi2_default>;
+    pinctrl-1 = <&spi2_sleep>;
+    pinctrl-names = "default", "sleep";
+    
+    /* Gemini's mapping: CS is D1 -> P0.26 */
+    cs-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>; 
+
+    ads1220: spi-device@0 {
         compatible = "vnd,spi-device";
         reg = <0>;
-        /* Lower to 100000 if you experience hardware timeouts */
-        spi-max-frequency = <1000000>; 
+        spi-max-frequency = <100000>; /* 100kHz */
     };
 };
