@@ -2,9 +2,6 @@
     zephyr,user {
         /* D2 is P0.28 on the XIAO BLE. DRDY is active low. */
         drdy-gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
-        
-        /* Move CS to here for manual GPIO control: D1 is P0.03 */
-        cs-gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
     };
 };
 
@@ -43,17 +40,22 @@
     };
 };
 
-/* Use the corrected pinctrl and REMOVE cs-gpios from hardware spi */
 &spi2 {
     compatible = "nordic,nrf-spim";
     status = "okay";
     pinctrl-0 = <&spi2_default>;
     pinctrl-1 = <&spi2_sleep>;
     pinctrl-names = "default", "sleep";
+    
+    /* Hardware CS on D1 (P0.03) */
+    cs-gpios = <&gpio0 3 GPIO_ACTIVE_LOW>; 
 
     ads1220: spi-device@0 {
         compatible = "vnd,spi-device";
         reg = <0>;
         spi-max-frequency = <1000000>; /* 1 MHz */
+        /* Zephyr handles the setup and hold delays automatically! */
+        spi-hold-time-delay = <10>;
+        spi-setup-time-delay = <10>;
     };
 };
