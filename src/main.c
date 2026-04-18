@@ -31,6 +31,8 @@ void drdy_isr(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 
 int main(void) {
     int err;
+    /* Give the USB CDC ACM terminal time to connect */
+    k_msleep(2500); 
 
     printk("\n--- ADS1220 Temperature Checker (Zephyr) ---\n");
 
@@ -74,12 +76,21 @@ int main(void) {
     // Read 4 registers starting at 0x00 (Cmd: 0x20 | 0x03)
     uint8_t tx_rreg[5] = { ADS1220_CMD_RREG | 0x03, 0x00, 0x00, 0x00, 0x00 };
     uint8_t rx_rreg[5] = { 0 };
-    struct spi_buf tx_rreg_buf = { .buf = tx_rreg, .len = 5 };
-    struct spi_buf_set tx_rreg_set = { .buffers = &tx_rreg_buf, .count = 1 };
-    struct spi_buf rx_rreg_buf = { .buf = rx_rreg, .len = 5 };
-    struct spi_buf_set rx_rreg_set = { .buffers = &rx_rreg_buf, .count = 1 };
     
-    spi_transceive_dt(&ads_spi, &tx_rreg_set, &rx_rreg_set);
+    // Write command
+    struct spi_buf tx_rreg_cmd_buf = { .buf = &tx_rreg[0], .len = 1 };
+    struct spi_buf_set tx_rreg_cmd_set = { .buffers = &tx_rreg_cmd_buf, .count = 1 };
+    spi_write_dt(&ads_spi, &tx_rreg_cmd_set);
+    
+    k_usleep(100); // Give the ADS1220 time to fetch register data
+    
+    // Read data
+    struct spi_buf tx_rreg_data_buf = { .buf = &tx_rreg[1], .len = 4 };
+    struct spi_buf_set tx_rreg_data_set = { .buffers = &tx_rreg_data_buf, .count = 1 };
+    struct spi_buf rx_rreg_data_buf = { .buf = &rx_rreg[1], .len = 4 };
+    struct spi_buf_set rx_rreg_data_set = { .buffers = &rx_rreg_data_buf, .count = 1 };
+    spi_transceive_dt(&ads_spi, &tx_rreg_data_set, &rx_rreg_data_set);
+
     printk("Registers [0-3]: 0x%02X 0x%02X 0x%02X 0x%02X\n", 
            rx_rreg[1], rx_rreg[2], rx_rreg[3], rx_rreg[4]);
            
@@ -114,12 +125,18 @@ int main(void) {
             uint8_t tx_rdata[4] = { ADS1220_CMD_RDATA, 0x00, 0x00, 0x00 };
             uint8_t rx_rdata[4] = { 0 };
 
-            struct spi_buf tx_rdata_buf = { .buf = tx_rdata, .len = 4 };
-            struct spi_buf_set tx_rdata_set = { .buffers = &tx_rdata_buf, .count = 1 };
-            struct spi_buf rx_rdata_buf = { .buf = rx_rdata, .len = 4 };
-            struct spi_buf_set rx_rdata_set = { .buffers = &rx_rdata_buf, .count = 1 };
+            struct spi_buf tx_rdata_cmd_buf = { .buf = &tx_rdata[0], .len = 1 };
+            struct spi_buf_set tx_rdata_cmd_set = { .buffers = &tx_rdata_cmd_buf, .count = 1 };
+            spi_write_dt(&ads_spi, &tx_rdata_cmd_set);
+            
+            k_usleep(100);
 
-            err = spi_transceive_dt(&ads_spi, &tx_rdata_set, &rx_rdata_set);
+            struct spi_buf tx_rdata_data_buf = { .buf = &tx_rdata[1], .len = 3 };
+            struct spi_buf_set tx_rdata_data_set = { .buffers = &tx_rdata_data_buf, .count = 1 };
+            struct spi_buf rx_rdata_data_buf = { .buf = &rx_rdata[1], .len = 3 };
+            struct spi_buf_set rx_rdata_data_set = { .buffers = &rx_rdata_data_buf, .count = 1 };
+
+            err = spi_transceive_dt(&ads_spi, &tx_rdata_data_set, &rx_rdata_data_set);
 
             if (err == 0) {
                 // rx_rdata[0] is the byte received during cmd (discard it)

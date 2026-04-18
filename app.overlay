@@ -1,7 +1,7 @@
 / {
     zephyr,user {
-        /* Gemini's mapping: DRDY is D2 -> P0.04 */
-        drdy-gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
+        /* D2 is P0.28 on the XIAO BLE */
+        drdy-gpios = <&gpio0 28 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
     };
 };
 
@@ -21,26 +21,33 @@
 };
 
 &pinctrl {
-    /* Use Gemini's mapping for SCLK, MOSI, MISO */
+    /* Correct mapping for Seeed XIAO BLE SPI (D8, D9, D10) */
     spi2_default: spi2_default {
         group1 {
-            psels = <NRF_PSEL(SPIM_SCK, 0, 8)>,   /* D8  -> P0.08 */
-                    <NRF_PSEL(SPIM_MOSI, 0, 10)>, /* D10 -> P0.10 */
-                    <NRF_PSEL(SPIM_MISO, 0, 9)>;  /* D9  -> P0.09 */
+            psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,   /* D8  -> P1.13 */
+                    <NRF_PSEL(SPIM_MOSI, 1, 15)>;  /* D10 -> P1.15 */
+        };
+        group2 {
+            psels = <NRF_PSEL(SPIM_MISO, 1, 14)>;  /* D9  -> P1.14 */
+            bias-pull-down;
         };
     };
 
     spi2_sleep: spi2_sleep {
         group1 {
-            psels = <NRF_PSEL(SPIM_SCK, 0, 8)>,
-                    <NRF_PSEL(SPIM_MOSI, 0, 10)>,
-                    <NRF_PSEL(SPIM_MISO, 0, 9)>;
+            psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+                    <NRF_PSEL(SPIM_MOSI, 1, 15)>;
             low-power-enable;
+        };
+        group2 {
+            psels = <NRF_PSEL(SPIM_MISO, 1, 14)>;
+            low-power-enable;
+            bias-pull-down;
         };
     };
 };
 
-/* Use &spi2 instead of &spi3 to avoid hardware clock conflicts */
+/* Use the corrected pinctrl and map CS to D1 (P0.03) */
 &spi2 {
     compatible = "nordic,nrf-spim";
     status = "okay";
@@ -48,12 +55,12 @@
     pinctrl-1 = <&spi2_sleep>;
     pinctrl-names = "default", "sleep";
     
-    /* Gemini's mapping: CS is D1 -> P0.26 */
-    cs-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>; 
+    /* D1 is P0.03 on the XIAO BLE */
+    cs-gpios = <&gpio0 3 GPIO_ACTIVE_LOW>; 
 
     ads1220: spi-device@0 {
         compatible = "vnd,spi-device";
         reg = <0>;
-        spi-max-frequency = <100000>; /* 100kHz */
+        spi-max-frequency = <1000000>; /* 1 MHz */
     };
 };
