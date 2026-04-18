@@ -11,9 +11,11 @@
 static const struct spi_dt_spec ads_spi = SPI_DT_SPEC_GET(SPI_NODE, 
     SPI_OP_MODE_MASTER | SPI_WORD_SET(8) | SPI_MODE_CPHA, 0);
 
-// DRDY Config
+// DRDY & CS Config
 #define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
 static const struct gpio_dt_spec drdy_pin = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, drdy_gpios);
+static const struct gpio_dt_spec cs_pin = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, cs_gpios);
+
 static struct gpio_callback drdy_cb_data;
 static K_SEM_DEFINE(drdy_sem, 0, 1);
 
@@ -29,12 +31,30 @@ void drdy_isr(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 #define ADS1220_CMD_WREG_REG1 0x44  // Write 1 register starting at Reg 1
 #define ADS1220_REG1_TEMP_ON  0x02  // Bit 1 = 1 (Enables Temp Sensor)
 
+// Safe SPI Wrapper with Manual CS
+int safe_spi_transceive(const struct spi_buf_set *tx_bufs, const struct spi_buf_set *rx_bufs) {
+    gpio_pin_set_dt(&cs_pin, 1); // Assert CS (Logical 1 = Physical LOW)
+    k_busy_wait(10);             // 10us setup time (with margin)
+
+    int err = spi_transceive_dt(&ads_spi, tx_bufs, rx_bufs);
+
+    k_busy_wait(10);             // 10us hold time (with margin)
+    gpio_pin_set_dt(&cs_pin, 0); // Release CS (Logical 0 = Physical HIGH)
+    return err;
+}
+
+int safe_spi_write(const struct spi_buf_set *tx_bufs) {
+    return safe_spi_transceive(tx_bufs, NULL);
+}
+
 int main(void) {
     int err;
     /* Give the USB CDC ACM terminal time to connect */
     k_msleep(2500); 
 
-    printk("\n--- ADS1220 Temperature Checker (Zephyr) ---\n");
+    printk("\n==========================================\n");
+    printk("--- ADS1220 Temperature Checker (Zephyr) ---\n");
+    printk("==========================================\n");
 
     if (!device_is_ready(ads_spi.bus)) {
         printk("Error: SPI bus device not ready.\n");
@@ -43,6 +63,18 @@ int main(void) {
 
     if (!gpio_is_ready_dt(&drdy_pin)) {
         printk("Error: DRDY pin not ready.\n");
+        return 0;
+    }
+
+    if (!gpio_is_ready_dt(&cs_pin)) {
+        printk("Error: CS pin not ready.\n");
+        return 0;
+    }
+
+    // Configure CS as an output, resting HIGH (inactive)
+    err = gpio_pin_configure_dt(&cs_pin, GPIO_OUTPUT_INACTIVE);
+    if (err < 0) {
+        printk("Error configuring CS pin: %d\n", err);
         return 0;
     }
 
@@ -62,15 +94,17 @@ int main(void) {
     gpio_add_callback(drdy_pin.port, &drdy_cb_data);
 
     /* 3. Initialization & Diagnostics */
+    k_msleep(100); // Let ADS1220 power up
+
     printk("Resetting ADS1220...\n");
     uint8_t reset_cmd = ADS1220_CMD_RESET;
     struct spi_buf tx_reset_buf = { .buf = &reset_cmd, .len = 1 };
     struct spi_buf_set tx_reset_set = { .buffers = &tx_reset_buf, .count = 1 };
-    err = spi_write_dt(&ads_spi, &tx_reset_set);
+    err = safe_spi_write(&tx_reset_set);
     if (err) {
         printk("SPI Write Error (Reset): %d\n", err);
     }
-    k_msleep(50); // Wait for reset to complete
+    k_msleep(100); // Wait for reset to complete
 
     printk("Reading ADS1220 Registers to verify SPI connection...\n");
     // To read registers, we send the RREG command byte, followed by 4 dummy bytes to clock the data out.
@@ -83,7 +117,7 @@ int main(void) {
     struct spi_buf_set rx_rreg_set = { .buffers = &rx_rreg_buf, .count = 1 };
     
     // We use a single transceive call so CS stays asserted
-    err = spi_transceive_dt(&ads_spi, &tx_rreg_set, &rx_rreg_set);
+    err = safe_spi_transceive(&tx_rreg_set, &rx_rreg_set);
     if (err) {
         printk("SPI Transceive Error (RREG): %d\n", err);
     }
@@ -92,10 +126,11 @@ int main(void) {
            rx_rreg[1], rx_rreg[2], rx_rreg[3], rx_rreg[4]);
            
     if (rx_rreg[1] == 0x00 || rx_rreg[1] == 0xFF) {
-        printk("WARNING: Registers read as 0x00 or 0xFF. SPI wiring might be wrong or board is unpowered!\n");
+        printk("WARNING: Registers read as 0x00 or 0xFF.\n");
+        printk("         -> Check 3.3V, GND, MOSI, MISO, SCLK, and CS wiring!\n");
     }
 
-    printk("Enabling Temperature Mode...\n");
+    printk("Enabling Temperature Mode (Continuous)...\n");
     // Command 0x40 is WREG starting at register 0.
     // 0x44 is WREG starting at register 1, writing 1 register (0x40 | (1 << 2) | (0)).
     // Let's write configuration register 1 to enable temperature sensor (bit 1) and continuous conversion mode (bit 2)
@@ -104,24 +139,31 @@ int main(void) {
     struct spi_buf tx_buf = { .buf = init_tx, .len = sizeof(init_tx) };
     struct spi_buf_set tx_set = { .buffers = &tx_buf, .count = 1 };
 
-    err = spi_write_dt(&ads_spi, &tx_set);
+    err = safe_spi_write(&tx_set);
     if (err) {
         printk("SPI Write Error (WREG): %d\n", err);
         return 0;
     }
     printk("ADS1220 configured for Temperature Mode (Continuous).\n");
 
+    printk("Starting Continuous Conversions...\n");
+    uint8_t start_cmd = ADS1220_CMD_START;
+    struct spi_buf tx_start_buf = { .buf = &start_cmd, .len = 1 };
+    struct spi_buf_set tx_start_set = { .buffers = &tx_start_buf, .count = 1 };
+    err = safe_spi_write(&tx_start_set);
+    if (err) {
+        printk("SPI Write Error (Start): %d\n", err);
+    }
+
+    // Give it a moment to take its first reading
+    k_msleep(50);
+
     /* 4. Main Sampling Loop */
     while (1) {
-        uint8_t start_cmd = ADS1220_CMD_START;
-        struct spi_buf tx_start_buf = { .buf = &start_cmd, .len = 1 };
-        struct spi_buf_set tx_start_set = { .buffers = &tx_start_buf, .count = 1 };
-        err = spi_write_dt(&ads_spi, &tx_start_set);
-        if (err) {
-            printk("SPI Write Error (Start): %d\n", err);
-        }
+        // Clear the semaphore so we always wait for a *fresh* DRDY pulse
+        k_sem_reset(&drdy_sem);
 
-        if (k_sem_take(&drdy_sem, K_MSEC(500)) == 0) {
+        if (k_sem_take(&drdy_sem, K_MSEC(1000)) == 0) {
             // ✅ Explicit 4-byte transaction: cmd + 3 data bytes
             uint8_t tx_rdata[4] = { ADS1220_CMD_RDATA, 0x00, 0x00, 0x00 };
             uint8_t rx_rdata[4] = { 0 };
@@ -131,7 +173,7 @@ int main(void) {
             struct spi_buf rx_rdata_buf = { .buf = rx_rdata, .len = 4 };
             struct spi_buf_set rx_rdata_set = { .buffers = &rx_rdata_buf, .count = 1 };
 
-            err = spi_transceive_dt(&ads_spi, &tx_rdata_set, &rx_rdata_set);
+            err = safe_spi_transceive(&tx_rdata_set, &rx_rdata_set);
 
             if (err == 0) {
                 // rx_rdata[0] is the byte received during cmd (discard it)
@@ -143,15 +185,21 @@ int main(void) {
                 }
                 
                 float tempC = (float)(raw_val >> 10) * 0.03125f;
-                printk("Internal Temperature: %.2f C\n", (double)tempC);
+                printk("Internal Temperature: %.2f C (Raw Data: 0x%06X)\n", (double)tempC, (raw_val & 0xFFFFFF));
             } else {
                 printk("SPI Transceive Error: %d\n", err);
             }
         } else {
             int current_drdy = gpio_pin_get_dt(&drdy_pin);
-            printk("Timeout waiting for DRDY! Current DRDY pin state: %d\n", current_drdy);
+            printk("Timeout! Logical DRDY pin state: %d (0=Idle, 1=Ready). ", current_drdy);
+            if (current_drdy == 0) {
+                printk("Chip is powered but not pulsing DRDY.\n");
+            } else {
+                printk("Chip stuck LOW. Check MISO wiring.\n");
+            }
         }
         
+        // Wait before asking for the next temperature
         k_msleep(1000);
     }
     
